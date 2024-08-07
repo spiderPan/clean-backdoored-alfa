@@ -46,7 +46,7 @@ scan_file_contents() {
 scan_specific_snippet() {
     local dir=$1
     echo "Scanning for specific snippet in directory: $dir"
-    grep -r -e "$PATTERN_CONTENT_1" -e "$PATTERN_CONTENT_2" -e "$PATTERN_CONTENT_3" -e "$PATTERN_CONTENT_4" -e "$PATTERN_CONTENT_5" -e "$PATTERN_CONTENT_6" "$dir" | tee -a "$LOG_FILE" | awk -F: '{print $1}' >> "$AFFECTED_FILES_LOG"
+    grep -r -e "$PATTERN_CONTENT_1" -e "$PATTERN_CONTENT_2" -e "$PATTERN_CONTENT_3" -e "$PATTERN_CONTENT_5" -e "$PATTERN_CONTENT_6" "$dir" | tee -a "$LOG_FILE" | awk -F: '{print $1}' >> "$AFFECTED_FILES_LOG"
 }
 
 # Function to scan for the fake plugin "erin" and log its directory
