@@ -7,6 +7,7 @@ PARENT_DIR="/home/*/public_html"
 PATTERN_FILE_NAME="about.php"
 PATTERN_FUNCTION_1="touch("
 PATTERN_FUNCTION_2="base64_decode"
+PATTERN_FUNCTION_3="goto UMrsh"
 PATTERN_CONTENT_1="alfapas.php"
 PATTERN_CONTENT_2="PEZpbGVzTWF0Y2ggIi4qXC4oP2k6cGh0bWx8cGhwfFBIUCkkIj4KT3JkZXIgQWxsb3csRGVueQpBbGxvdyBmcm9tIGFsbAo8L0ZpbGVzTWF0Y2g+"
 PATTERN_CONTENT_3="loggershell443"
@@ -27,8 +28,7 @@ scan_file_names() {
     local dir=$1
     echo "Scanning for files named $PATTERN_FILE_NAME in directory: $dir"
     find "$dir" -type f -name "$PATTERN_FILE_NAME" | while read -r file; do
-        # Check if the file contains the suspicious functions
-        if grep -q -e "$PATTERN_FUNCTION_1" -e "$PATTERN_FUNCTION_2" "$file"; then
+        if grep -q -e "$PATTERN_FUNCTION_1" -e "$PATTERN_FUNCTION_2" -e "$PATTERN_FUNCTION_3" "$file"; then
             echo "Found suspicious file: $file" >> "$LOG_FILE"
             echo "$file" >> "$AFFECTED_FILES_LOG"
         fi
@@ -39,7 +39,7 @@ scan_file_names() {
 scan_file_contents() {
     local dir=$1
     echo "Scanning for suspicious content in PHP files in directory: $dir"
-    grep -r --include="*.php" -e "$PATTERN_CONTENT_1" -e "$PATTERN_CONTENT_2" -e "$PATTERN_CONTENT_3" -e "$PATTERN_CONTENT_4" "$dir" | tee -a "$LOG_FILE" | awk -F: '{print $1}' >> "$AFFECTED_FILES_LOG"
+    grep -r --include="*.php" -e "$PATTERN_CONTENT_1" -e "$PATTERN_CONTENT_2" -e "$PATTERN_CONTENT_3" "$dir" | tee -a "$LOG_FILE" | awk -F: '{print $1}' >> "$AFFECTED_FILES_LOG"
 }
 
 # Function to scan for a specific snippet in any file
@@ -59,23 +59,35 @@ scan_fake_plugin() {
     done
 }
 
-# Function to delete affected files and directories
-delete_affected_files() {
-    while IFS= read -r path; do
-        if [ -f "$path" ]; then
-            echo "Deleting file: $path"
-            rm "$path"
-        elif [ -d "$path" ]; then
-            echo "Deleting directory: $path"
-            rm -r "$path"
-        else
-            echo "File or directory not found or already deleted: $path"
-        fi
-    done < "$AFFECTED_FILES_LOG"
-    echo "Deletion completed."
+# Function to scan for unexpected files in wp-admin
+scan_unexpected_files() {
+    local dir=$1
+    echo "Scanning for unexpected files in wp-admin in directory: $dir"
+    find "$dir/wp-admin" -type f -name "wp-blog-header.php" | while read -r file; do
+        echo "Found unexpected file in wp-admin: $file" >> "$LOG_FILE"
+        echo "$file" >> "$AFFECTED_FILES_LOG"
+    done
 }
 
-# Main function to run the scan and optionally delete affected files
+# Function to clean infected PHP files
+clean_infected_files() {
+    while IFS= read -r file; do
+        if [ -f "$file" ]; then
+            echo "Cleaning file: $file"
+            sed -i '/goto UMrsh/d' "$file"
+            sed -i '/function get_u/d' "$file"
+            sed -i '/function post_u/d' "$file"
+        elif [ -d "$file" ]; then
+            echo "Cleaning directory: $file"
+            rm -r "$file"
+        else
+            echo "File or directory not found or already cleaned: $file"
+        fi
+    done < "$AFFECTED_FILES_LOG"
+    echo "Cleaning completed."
+}
+
+# Main function to run the scan and optionally clean infected files
 main() {
     local mode=$1
 
@@ -87,6 +99,7 @@ main() {
         scan_file_contents "$TARGET_DIR"
         scan_specific_snippet "$TARGET_DIR"
         scan_fake_plugin "$TARGET_DIR"
+        scan_unexpected_files "$TARGET_DIR"
     else
         echo "Scanning all websites under the parent directory: $PARENT_DIR"
         # Find all directories under the parent directory and scan them
@@ -95,19 +108,20 @@ main() {
             scan_file_contents "$website_dir"
             scan_specific_snippet "$website_dir"
             scan_fake_plugin "$website_dir"
+            scan_unexpected_files "$website_dir"
         done
     fi
 
     echo "Scan completed. Results are logged in $LOG_FILE and affected files are logged in $AFFECTED_FILES_LOG"
 
-    if [ "$mode" = "delete" ]; then
-        delete_affected_files
+    if [ "$mode" = "clean" ]; then
+        clean_infected_files
     fi
 }
 
 # Check for the correct usage
 if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 {scan|delete} [/path/to/specific/site]"
+    echo "Usage: $0 {scan|clean} [/path/to/specific/site]"
     exit 1
 fi
 
