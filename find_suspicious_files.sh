@@ -17,9 +17,12 @@ mkdir -p "$LOG_DIR"
 PATTERN_FUNCTIONS=("goto UMrsh")
 PATTERN_CONTENTS=(
   "alfapas.php"
+  "md5(md5(md5"
   "PEZpbGVzTWF0Y2ggIi4qXC4oP2k6cGh0bWx8cGhwfFBIUCkkIj4KT3JkZXIgQWxsb3csRGVueQpBbGxvdyBmcm9tIGFsbAo8L0ZpbGVzTWF0Y2g+"
   "loggershell443"
   "XSnyLio6byn2NhIhXlIhMiX1HisyNif5Hj7wayAgU/@3HisyNiT5HlH1MlIhHisyNiHwLinhS"
+  "XSn/Myo6byn0NhIhMiYhMhH6byn3NhIXU/ksX1X7OBH6byn2NhIhMlIhXiX1HisyNiDxNhIKT1Y2SjIA"
+  "teg_ini1ledoced_46"
   "JhYLEQZqGB4oDH4MEwBdSj0fEBctW1QMPh8UHDoxfxs"
   "goto UMrsh"
   "tXpjcGbhlm5sJx3bdtKxbfOLvtjq2Lb5xUkn6djq2LbTsW2r"
@@ -40,6 +43,10 @@ scan_file_contents() {
     done
     for func in "${PATTERN_FUNCTIONS[@]}"; do
         grep -r --include="*.php" -e "$func" "$dir" 2>/dev/null | tee -a "$LOG_FILE" | awk -F: '{print $1}' >> "$AFFECTED_FILES_LOG"
+    done
+
+    find "$dir" -type f -path "*/wp-content/wp-configs.php" | while read -r file; do
+        echo "Found wp-configs.php: $file" | tee -a "$LOG_FILE"
     done
 }
 

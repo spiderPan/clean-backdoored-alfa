@@ -1,10 +1,7 @@
 #!/bin/bash
 
-# Path to the log file containing the list of site names
+# Path to the log file for tracking actions
 LOG_DIR="/var/log/scan"
-SITES_LOG_FILE="$LOG_DIR/site_list.log"
-
-# Log file for tracking actions
 LOG_FILE="$LOG_DIR/sites_cleanup.log"
 
 # Ensure the log file exists and is empty
@@ -18,6 +15,12 @@ clean_wp_directories() {
     rm -rf "$dir/wp-includes"
     wp core download --force --skip-content --allow-root --path="$dir" | tee -a "$LOG_FILE"
     echo "Reinstallation of wp-admin and wp-includes completed for: $dir" | tee -a "$LOG_FILE"
+}
+
+flush_rewrite_rules() {
+    local dir=$1
+    echo "Flushing rewrite rules in $dir" | tee -a "$LOG_FILE"
+    wp rewrite flush --hard --allow-root --path="$dir"
 }
 
 reset_permissions() {
@@ -37,45 +40,32 @@ reset_file_permissions() {
     chmod 644 "$file"
 }
 
-# Main function to go through the list of sites and clean them
+# Main function to go through the CSV and process each site
 main() {
-    if [ ! -f "$SITES_LOG_FILE" ]; then
-        echo "Sites log file not found: $SITES_LOG_FILE" | tee -a "$LOG_FILE"
+    if [ "$#" -ne 1 ]; then
+        echo "Usage: $0 /path/to/accounts.csv" | tee -a "$LOG_FILE"
         exit 1
     fi
 
-    while IFS= read -r site; do
-        local dir="/home/$site/public_html"
-        if [ -d "$dir" ]; then
-            echo "Processing site: $site" | tee -a "$LOG_FILE"
-            clean_wp_directories "$dir"
-            for wp_dir in "wp-admin" "wp-includes"; do
-                local target_dir="$dir/$wp_dir"
-                
-                if [ -d "$target_dir" ]; then
-                    local owner=$(stat -c '%U' "$target_dir")
-                    
-                    if [ "$owner" == "root" ]; then
-                        local user=$(basename "$site")
-                        reset_permissions "$target_dir" "$user"
-                    fi
-                fi
-            done
+    CSV_FILE="$1"
 
-            local index_file="$dir/index.php"
-            if [ -f "$index_file" ]; then
-                local owner=$(stat -c '%U' "$index_file")
-                
-                if [ "$owner" == "root" ]; then
-                    local user=$(basename "$site")
-                    reset_file_permissions "$index_file" "$user"
-                fi
-            fi
-        else
-            echo "Directory $dir does not exist. Skipping site: $site" | tee -a "$LOG_FILE"
+    if [ ! -f "$CSV_FILE" ]; then
+        echo "CSV file not found: $CSV_FILE" | tee -a "$LOG_FILE"
+        exit 1
+    fi
+
+    IFS=","
+    while read -r account wp_dir; do
+        # Skip header or empty lines
+        if [ "$account" == "account" ] || [ -z "$account" ] || [ -z "$wp_dir" ]; then
+            continue
         fi
-    done < "$SITES_LOG_FILE"
-}
 
-# Run the main function
-main
+        echo "Processing account: $account with WP directory: $wp_dir" | tee -a "$LOG_FILE"
+
+        if [ -d "$wp_dir" ]; then
+            flush_rewrite_rules "$wp_dir"
+            clean_wp_directories "$wp_dir"
+
+            for wp_subdir in "wp-admin" "wp-includes"; do
+                local target_dir="$wp_dir

@@ -13,6 +13,15 @@ cd clean-backdoored-alfa
 ./find_suspicious.sh scan # scan only and show the infected files in /var/log/affected_files.log
 ./find_suspicious.sh delete # scan and delete
 ./verify_wp.sh # verify the WordPress installation
-./reset_wp.sh # reset the WordPress installation
+./reset_wp.sh ./account.csv # reset the WordPress installation with the account.csv file (see the example)
 ./delete_wp.sh # delete the affected files
+```
+
+## Preprocessing
+
+account.csv contains the site name and the site path. The site path is the root directory of the WordPress installation.
+
+```csv
+site_a, /home/site_a/public_html
+site_b, /home/site_b/public_html/wp
 ```
