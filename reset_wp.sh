@@ -3,6 +3,7 @@
 # Path to the log file for tracking actions
 LOG_DIR="/var/log/scan"
 LOG_FILE="$LOG_DIR/sites_cleanup.log"
+SITE_LIST_LOG="$LOG_DIR/site_list.log"
 
 # Ensure the log file exists and is empty
 : > "$LOG_FILE"
@@ -40,7 +41,7 @@ reset_file_permissions() {
     chmod 644 "$file"
 }
 
-# Main function to go through the CSV and process each site
+# Main function to go through the CSV and process each site listed in site_list.log
 main() {
     if [ "$#" -ne 1 ]; then
         echo "Usage: $0 /path/to/accounts.csv" | tee -a "$LOG_FILE"
@@ -54,6 +55,14 @@ main() {
         exit 1
     fi
 
+    if [ ! -f "$SITE_LIST_LOG" ]; then
+        echo "Sites list log file not found: $SITE_LIST_LOG" | tee -a "$LOG_FILE"
+        exit 1
+    fi
+
+    # Read the sites from site_list.log into an array
+    mapfile -t sites_to_process < "$SITE_LIST_LOG"
+
     IFS=","
     while read -r account wp_dir; do
         # Skip header or empty lines
@@ -61,11 +70,40 @@ main() {
             continue
         fi
 
-        echo "Processing account: $account with WP directory: $wp_dir" | tee -a "$LOG_FILE"
+        # Check if this account is in the sites to process
+        if [[ " ${sites_to_process[@]} " =~ " ${account} " ]]; then
+            echo "Processing account: $account with WP directory: $wp_dir" | tee -a "$LOG_FILE"
 
-        if [ -d "$wp_dir" ]; then
-            flush_rewrite_rules "$wp_dir"
-            clean_wp_directories "$wp_dir"
+            if [ -d "$wp_dir" ]; then
+                flush_rewrite_rules "$wp_dir"
+                clean_wp_directories "$wp_dir"
 
-            for wp_subdir in "wp-admin" "wp-includes"; do
-                local target_dir="$wp_dir
+                for wp_subdir in "wp-admin" "wp-includes"; do
+                    local target_dir="$wp_dir/$wp_subdir"
+                    
+                    if [ -d "$target_dir" ]; then
+                        local owner=$(stat -c '%U' "$target_dir")
+                        
+                        if [ "$owner" == "root" ]; then
+                            reset_permissions "$target_dir" "$account"
+                        fi
+                    fi
+                done
+
+                local index_file="$wp_dir/index.php"
+                if [ -f "$index_file" ]; then
+                    local owner=$(stat -c '%U' "$index_file")
+                    
+                    if [ "$owner" == "root" ]; then
+                        reset_file_permissions "$index_file" "$account"
+                    fi
+                fi
+            else
+                echo "Directory $wp_dir does not exist. Skipping account: $account" | tee -a "$LOG_FILE"
+            fi
+        fi
+    done < "$CSV_FILE"
+}
+
+# Run the main function
+main "$@"
